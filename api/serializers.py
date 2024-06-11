@@ -17,21 +17,30 @@ class SemesterSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100, required=False)
 
 
-class SubjectSerializer(serializers.ModelSerializer):
-    semester = SemesterSerializer()
+class TeacherSerializer(serializers.Serializer):
+    id = serializers.ChoiceField(choices=User.objects.all().values_list("id", flat=True), required=True)
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
 
-    teacher_first_name = serializers.ReadOnlyField(source="teacher.first_name")
-    teacher_last_name = serializers.ReadOnlyField(source="teacher.last_name")
+
+class SubjectSerializer(serializers.ModelSerializer):
+    teacher = TeacherSerializer()
+    semester = SemesterSerializer()
 
     class Meta:
         model = Subject
         fields = "__all__"
 
     def create(self, validated_data):
+        teacher = validated_data.pop("teacher")
+        teacher_serializer = TeacherSerializer(teacher)
         semester = validated_data.pop("semester")
-        serializer = SemesterSerializer(semester)
+        semester_serializer = SemesterSerializer(semester)
         subject = Subject.objects.create(
-            semester_id=serializer.data["id"], **validated_data
+            semester_id=semester_serializer.data["id"],
+            teacher_id=teacher_serializer.data["id"],
+            **validated_data
         )
         return subject
 
@@ -41,6 +50,11 @@ class SubjectSerializer(serializers.ModelSerializer):
         try:
             semester_id = validated_data["semester"]["id"]
             instance.semester = Semester.objects.get(id=semester_id)
+        except:
+            pass
+        try:
+            teacher_id = validated_data["teacher"]["id"]
+            instance.teacher = User.objects.get(id=teacher_id)
         except:
             pass
         instance.save()
